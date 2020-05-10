@@ -18,23 +18,51 @@ villagers <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/
 
 ```{r}
 
+library(ggimage)
+library(ggtextures)
+
 my_villagers <- c("Paolo", "Roald", "Cherry", "Bones", "Bangle", "Nana", "Melba", "Chadder", "Rizzo", "Pekoe")
 
-flowers <- items %>% filter(category == "Flowers" & sell_value == 240) %>% rowwise() %>% 
+bkg_grass <- tibble(
+  xmin = c(1), ymin = c(1), xmax = c(2), ymax = c(4),
+  image = list("https://images-wixmp-ed30a86b8c4ca887773594c2.wixmp.com/f/da443644-2b2a-4a35-ac70-c28f4e5d86e4/d79w7f1-356776f7-78e4-482c-8790-bd84d06c7717.png?token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1cm46YXBwOiIsImlzcyI6InVybjphcHA6Iiwib2JqIjpbW3sicGF0aCI6IlwvZlwvZGE0NDM2NDQtMmIyYS00YTM1LWFjNzAtYzI4ZjRlNWQ4NmU0XC9kNzl3N2YxLTM1Njc3NmY3LTc4ZTQtNDgyYy04NzkwLWJkODRkMDZjNzcxNy5wbmcifV1dLCJhdWQiOlsidXJuOnNlcnZpY2U6ZmlsZS5kb3dubG9hZCJdfQ.wIZ-u0EgVB5s6QXFTQMmnMkId8L8hsYX0zKOnDXKpSg")
+)
+
+bkg_sheen <- tibble(
+  xmin = c(1), ymin = c(1), xmax = c(2), ymax = c(4),
+  image = list("https://image.shutterstock.com/image-illustration/texture-light-gray-smoke-blurred-260nw-693969052.jpg"))
+
+flowers <- items %>% 
+  filter(category == "Flowers") %>% 
+  filter(str_detect(tolower(name), "red|yellow|white")) %>% 
+  select(-sources) %>% 
+  distinct() %>% 
+  rowwise() %>% 
   mutate(x=sample(1:1000, 1), 
          y=sample(1:1000, 1)) 
 
-villagers %>% 
+my_villagers <- villagers %>% 
   rowwise() %>% 
   mutate(x=sample(seq(1,1000,10), 1), 
          y=sample(seq(1,1000,10), 1)) %>% 
-  filter(name %in% my_villagers) %>% 
-  ggplot(aes(x=x, y=y)) +
-  geom_image(aes(image = image_url), 
-             data = flowers) +
-  coord_cartesian(xlim = c(1,1000), ylim = c(1,1000)) + 
-  geom_image(aes(image=url)) +
-  coord_fixed()
+  filter(name %in% my_villagers) 
+
+ggplot() +
+  geom_textured_rect(data = bkg_grass, aes(xmin = -100, xmax =1100, 
+                                      ymin = -100, ymax = 1100, 
+                                      image = image), 
+                     img_width = unit(1, "in")) +
+  geom_rect(aes(xmin = -100, xmax = 1100, 
+                ymin = -100, ymax = 1100),
+               fill = "grey", alpha = 0.3, color = "transparent") +
+  geom_image(aes(x=x, y=y, image = image_url), data = flowers) +
+  geom_image(aes(x=x, y=y, image=url), data = my_villagers) +
+  coord_cartesian(xlim = c(-100,1100), ylim = c(-100,1100)) +
+  coord_fixed() +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) + 
+  theme_void()
+
 
 ```
 
@@ -42,25 +70,36 @@ villagers %>%
 
 ```{r}
 
-acnh_swatch <- swatches::read_gpl("https://raw.githubusercontent.com/garrett/Animal-Crossing-design/master/palette/AC-NL.gpl")
-
-
 villagers %>% 
   mutate(species=fct_infreq(species), 
          personality = fct_infreq(personality)) %>%
   count(species, personality) %>%
-  ggplot(aes(x=species,
-             y=personality, fill=n)) + 
-  geom_raster() +
+  ggplot() + 
+  geom_raster(aes(x=species,
+             y=personality, fill=n)) +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
-  scale_fill_distiller(palette = "RdPu")
+  scale_fill_distiller(palette = "RdPu", direction = 1, name= "number \nof villagers") +
+  theme(panel.background = element_rect(fill = "#82d9d9", 
+                                        color = "#10345e", size = 3), 
+        plot.background = element_rect(fill = "#d3eff0"), 
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        text = element_text(colour = "#10345e", face = "bold"), 
+        axis.text.x = element_text(angle = 45, hjust = 1, colour = "#10345e"), 
+        axis.text.y = element_text(colour = "#10345e")) +
+  scale_x_discrete(expand = c(0.1,0.1)) +
+  scale_y_discrete(expand = c(0.2,0.2)) +
+  scale_size_identity() +
+  ggtitle("Species and Personality types in ACNH", 
+          "Peppy rabits are the most common combination. ")
 
 ```
 
 ## GF shoutouts
 
 ```{r}
+
+library(gtable)
 
 gf_words <- c("gf|wife|girlfriend|iancé")
 
