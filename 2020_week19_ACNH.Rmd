@@ -1,0 +1,88 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r}
+
+library(tidyverse)
+
+critic <- readr::read_tsv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-05/critic.tsv')
+user_reviews <- readr::read_tsv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-05/user_reviews.tsv')
+items <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-05/items.csv')
+villagers <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-05/villagers.csv')
+
+```
+
+## My villagers
+
+```{r}
+
+my_villagers <- c("Paolo", "Roald", "Cherry", "Bones", "Bangle", "Nana", "Melba", "Chadder", "Rizzo", "Pekoe")
+
+flowers <- items %>% filter(category == "Flowers" & sell_value == 240) %>% rowwise() %>% 
+  mutate(x=sample(1:1000, 1), 
+         y=sample(1:1000, 1)) 
+
+villagers %>% 
+  rowwise() %>% 
+  mutate(x=sample(seq(1,1000,10), 1), 
+         y=sample(seq(1,1000,10), 1)) %>% 
+  filter(name %in% my_villagers) %>% 
+  ggplot(aes(x=x, y=y)) +
+  geom_image(aes(image = image_url), 
+             data = flowers) +
+  coord_cartesian(xlim = c(1,1000), ylim = c(1,1000)) + 
+  geom_image(aes(image=url)) +
+  coord_fixed()
+
+```
+
+## Popular villager traits
+
+```{r}
+
+acnh_swatch <- swatches::read_gpl("https://raw.githubusercontent.com/garrett/Animal-Crossing-design/master/palette/AC-NL.gpl")
+
+
+villagers %>% 
+  mutate(species=fct_infreq(species), 
+         personality = fct_infreq(personality)) %>%
+  count(species, personality) %>%
+  ggplot(aes(x=species,
+             y=personality, fill=n)) + 
+  geom_raster() +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  scale_fill_distiller(palette = "RdPu")
+
+```
+
+## GF shoutouts
+
+```{r}
+
+gf_words <- c("gf|wife|girlfriend|iancé")
+
+island_complain_indicators <- c("one island|multiple islands|one console|per switch|1 island|one person")
+
+user_reviews %>% 
+  rowwise() %>% 
+  mutate(complaint_present = str_detect(tolower(text),
+                                        island_complain_indicators), 
+         gf_present = str_detect(tolower(text), gf_words)) %>%
+  count(gf_present, complaint_present)
+
+```
+
+## Character mentions
+
+```{r}
+
+user_reviews %>% 
+  rowwise() %>% 
+  mutate(character_mention = str_detect(tolower(text),
+                                        tolower(str_c(villagers$name, collapse = "|")))) %>%
+  count(character_mention)
+
+```

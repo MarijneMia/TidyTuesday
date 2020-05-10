@@ -1,0 +1,41 @@
+---
+title: "2020_week14_beer"
+output: html_document
+---
+
+```{r}
+
+library(tidyverse)
+
+brewing_materials <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-31/brewing_materials.csv')
+beer_taxed <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-31/beer_taxed.csv')
+brewer_size <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-31/brewer_size.csv')
+beer_states <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-31/beer_states.csv')
+
+
+```
+
+# Exploration
+
+## beer_states
+
+```{r}
+
+beer_states %>% 
+  filter(state != "total") %>%
+  ggplot(aes(x=year, y=barrels, group=state, col=state)) + 
+  geom_line() + 
+  facet_grid(type ~ ., scales = "free_y") +
+  theme(legend.position = "none") 
+
+beer_states %>% 
+  filter(state != "total" & type == "On Premises") %>%
+  ggplot(aes(x=year, y=barrels, group=state, col=state)) + 
+  geom_line() + 
+  theme(legend.position = "none") +
+  gghighlight(max(barrels) > 3e5) +
+  ggtitle("Barrels sold over the years per state",
+          subtitle = "California is has grown the most in Barrels sold from premises")
+
+```
+

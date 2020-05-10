@@ -1,0 +1,50 @@
+---
+title: "2020_week13_headInjury"
+output: html_document
+---
+
+```{r}
+
+library(tidyverse)
+# tuesdata <- tidytuesdayR::tt_load(2020, week = 13)
+
+tbi_age <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-24/tbi_age.csv')
+tbi_year <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-24/tbi_year.csv')
+tbi_military <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-24/tbi_military.csv')
+
+
+```
+
+## tbi_age
+
+### Exploration
+
+```{r}
+
+skimr::skim(tbi_age)
+
+unique(tbi_age$age_group)
+unique(tbi_age$type)
+unique(tbi_age$injury_mechanism)
+
+tbi_age %>% 
+  ggplot(aes(x=log2(number_est), 
+             y=log2(rate_est), 
+             col=age_group)) + 
+  geom_point() +
+  ggtitle("Number of incidents vs rate approximation, colored per age group", 
+          "I am asuming that the rate_est is based on the number_est")
+
+age_groups_levels <- c("0-4", "5-14", "15-24", "25-34", 
+                       "35-44", "45-54", "55-64", "65-74", "75+")
+
+tbi_age <- tbi_age %>%
+  filter(age_group %in% age_groups_levels) %>%
+  mutate(age_group = factor(age_group, levels = age_groups_levels))
+
+tbi_age %>% 
+  ggplot(aes(x=age_group, y=rate_est, fill=age_group)) +
+  geom_bar(stat="identity") + 
+  facet_grid(type ~ injury_mechanism)
+
+```

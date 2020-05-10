@@ -1,0 +1,116 @@
+---
+title: "2020_week17_GDPR"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+# tuesdata <- tidytuesdayR::tt_load(2020, week = 13)
+
+gdpr_violations <- readr::read_tsv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-04-21/gdpr_violations.tsv')
+gdpr_text <- readr::read_tsv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-04-21/gdpr_text.tsv')
+
+```
+
+
+## Exploration
+
+```{r}
+
+skimr::skim(gdpr_text)
+head(gdpr_text)
+
+skimr::skim(gdpr_violations)
+head(gdpr_violations)
+
+```
+
+```{r}
+
+gdpr_violations %>% 
+  count(authority) %>% 
+  mutate(author_fct = reorder(authority, n)) %>% 
+  ggplot(aes(x=author_fct, y=n)) + 
+  geom_histogram(stat="identity") + 
+  theme(axis.text.x = element_text(angle = 45, hjust =1))
+
+gdpr_violations %>% 
+  count(name) %>% 
+  mutate(name_fct = reorder(name, n)) %>% 
+  ggplot(aes(x=name_fct, y=n)) + 
+  geom_histogram(stat="identity") + 
+  theme(axis.text.x = element_text(angle = 45, hjust =1))
+
+```
+
+```{r}
+
+price_per_country <- gdpr_violations %>% 
+  group_by(name) %>% 
+  summarise(price_sum = sum(price)) 
+
+n_per_country <- gdpr_violations %>% 
+  count(name)
+
+```
+
+## Plots
+
+### Maps
+
+```{r}
+
+library(png)
+
+sea_bkg <- image_read("https://jeroen.github.io/images/Rlogo.png")
+
+bkg_df <- tibble(
+  xmin = c(1), ymin = c(1), xmax = c(2), ymax = c(4),
+  #image = list(magick::image_read_svg("https://upload.wikimedia.org/wikipedia/commons/a/a9/Japanese_Wave_Pattern.svg"))
+  image = list("https://storage.needpix.com/rsynced_images/shapes-pattern-1410630567ZoR.jpg")
+)
+
+compas_location <- "https://pngimg.com/uploads/compass/compass_PNG25555.png"
+mypngfile <- download.file(compas_location, destfile = 'mypng.png', mode = 'wb')
+img <- readPNG(source = "mypng.png")
+
+```
+
+```{r}
+
+library("rnaturalearth")
+library("rnaturalearthdata")
+
+europe <- ne_countries(scale = "medium", returnclass = "sf", continent="europe")
+
+europe %>% 
+  left_join(price_per_country, by="name") %>%
+  ggplot(aes(fill=price_sum)) +
+  geom_textured_rect(data = bkg_df, aes(xmin = -40, xmax =60, 
+                                      ymin = 30, ymax = 85, 
+                                      image = image), 
+                     img_width = unit(1, "in")) + 
+  geom_sf() + 
+  coord_sf(xlim = c(-40, 60), 
+           ylim=c(30, 85))
+
+
+europe %>% 
+  left_join(n_per_country, by="name") %>%
+  ggplot(aes(fill=n)) +
+  geom_textured_rect(data = bkg_df, aes(xmin = -30, xmax =50, 
+                                      ymin = 30, ymax = 74, 
+                                      image = image), 
+                     img_width = unit(1, "in"), fill = 1) + 
+  geom_sf(col = "#4d2902") + 
+  scale_fill_distiller(palette = "Oranges", trans = "log10", direction = -1,  na.value = "#cfc1b4") +
+  coord_sf(xlim = c(-30, 50), ylim=c(30, 74)) +
+  scale_x_continuous(expand = c(0,0)) + 
+  scale_y_continuous(expand = c(0,0)) + 
+  theme(plot.background = element_rect(fill = "#e0ca92"), 
+        legend.position = "none") +
+   annotation_custom(mypngfile, xmin=-20, xmax=-15, ymin=35, ymax=40) 
+
+
+```

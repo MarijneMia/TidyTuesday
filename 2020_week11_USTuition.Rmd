@@ -1,0 +1,438 @@
+---
+title: "20200310_tidy_tuesday"
+output: html_document
+---
+
+```{r}
+
+# Get the Data
+
+tuition_cost <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/tuition_cost.csv')
+
+tuition_income <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/tuition_income.csv') 
+
+salary_potential <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/salary_potential.csv')
+
+historical_tuition <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/historical_tuition.csv')
+
+diversity_school <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-03-10/diversity_school.csv')
+
+```
+
+# DF inspection
+
+## tuition_cost
+
+```{r}
+
+skimr::skim(tuition_cost)
+
+```
+
+### variable check
+
+Here we see a couple of odd things in the character variables; 
+- Who is the school is 67 characters?
+  + There are indeed colleges with sillily long names. 
+- Fewer school names than rows, do we have school duplicates?
+  + If a college name occurs multiple times, they are located in different states, keep this in mind. 
+- We have more state_codes than states, who else is included than mainland US? Are these then also the states that have a missing name?
+  + there are codes for territories, rather than states. I added this in the state_trri column. 
+- Consider converting years to numeric?
+  + since there are only 2 and 4 year degrees (after removing the 1 `Other`) I will keep them as they are. 
+
+```{r}
+
+library(dplyr)
+
+# longest college names
+tuition_cost %>% arrange(nchar(name)) %>% tail()
+
+```
+
+There are indeed colleges with sillily long names. 
+
+```{r}
+
+multiple_occurance_colleges <- tuition_cost %>% count(name) %>% filter(n != 1) %>% pull(name)
+tuition_cost %>% filter(name == "Columbia College")
+
+tuition_cost %>% 
+  filter(name %in% multiple_occurance_colleges) %>% 
+  select(name, state_code) %>% 
+  count(name, state_code) %>% 
+  count(n)
+
+```
+
+If a college name occurs multiple times, they are located in different states, keep this in mind. 
+
+```{r}
+
+# state.name and state.abb contain the standerd 50 states
+abrevs_unknown <- unique(tuition_cost$state_code)[!unique(tuition_cost$state_code) %in% state.abb]
+
+tuition_cost %>% na.omit() %>% filter(!state %in% state.name) %>% pull(state) %>% unique() 
+
+tuition_cost %>% 
+  filter(state_code %in% abrevs_unknown) %>% 
+  select(state, state_code) %>% 
+  unique()
+
+tuition_cost %>% 
+  filter(state_code %in% abrevs_unknown) %>% 
+  count(state_code)
+
+tuition_cost <- tuition_cost %>%
+  mutate(state_terri = case_when(state_code == "AS" ~ "American Samoa", 
+                                 state_code == "GU" ~ "Guam", 
+                                 state_code == "PR" ~ "Puerto Rico", 
+                                 state_code == "VI" ~ "U.S. Virgin Islands", 
+                                 state_code == "DC" ~ "District of Columbia", 
+                                 TRUE ~ state))
+
+```
+
+I am missing the statenames for 5 codes. 
+these are five "territorries". rather than states; American Samoa (AS), Guam (GU), Puerto Rico (PR), U.S. Virgin Islands (VI), and District of Columbia (DC). 
+I will put these in as state_terri, keeping in mind that they are technically not states. 
+
+```{r}
+
+tuition_cost %>% count(degree_length)
+
+tuition_cost %>% filter(degree_length == "Other")
+
+tuition_cost <- tuition_cost %>% filter(degree_length != "Other")
+
+```
+
+I have no patience for the `University of North Texas at DallasSystem`. 
+I removed it from the set. 
+
+```{r eval=FALSE}
+
+tibble(tc_name = tuition_cost$name) %>% 
+  filter(grepl(tc_name, pattern = "-")) %>% 
+  rowwise %>% mutate(n_char = length(which(strsplit(tc_name, "")[[1]]=="-"))) %>% 
+  count(n_char)
+
+to_filter_out <- tibble(tc_name = tuition_cost$name) %>% 
+  filter(grepl(tc_name, pattern = "-")) %>% 
+  rowwise %>% mutate(n_char = length(which(strsplit(tc_name, "")[[1]]=="-"))) %>% 
+  filter(n_char > 1) %>% 
+  pull(tc_name)
+
+tibble(tc_name = unique(tuition_cost$name)) %>% 
+  filter(grepl(tc_name, pattern = "-")) %>% 
+  filter(!tc_name %in% to_filter_out) %>% 
+  rowwise() %>% 
+  mutate(dash_pos = gregexpr(tc_name, pattern = "-") %>% unlist, 
+         relative_pos = dash_pos / (nchar(tc_name))) %>% 
+  ggplot(aes(x=relative_pos)) + 
+  geom_histogram()
+
+tibble(tc_name = unique(tuition_cost$name)) %>% 
+  filter(grepl(tc_name, pattern = "-")) %>% 
+  filter(!tc_name %in% to_filter_out) %>% 
+  rowwise() %>% 
+  mutate(dash_pos = gregexpr(tc_name, pattern = "-") %>% unlist, 
+         relative_pos = dash_pos / (nchar(tc_name)), 
+         type_division = case_when(relative_pos < 0.5 ~ "replace", 
+                                   relative_pos > 0.5 ~ "drop")) %>%
+  head()
+  
+tuition_cost <- tuition_cost %>%
+  filter(!name %in% to_filter_out) %>% 
+  rowwise() %>% 
+  mutate(dash_pos = gregexpr(name, pattern = "-") %>% unlist, 
+         relative_pos = dash_pos / (nchar(name)), 
+         name = case_when(dash_pos > 0 & relative_pos < 0.5 ~ str_replace(name, "-", " "), 
+                                   dash_pos > 0 & relative_pos > 0.5 ~ substr(name, start = 1, stop = dash_pos), 
+                                   TRUE ~ name)) %>% 
+  select(name, everything(),  -dash_pos, -relative_pos)
+  
+```
+
+I have a dashing problem. 
+Some colleges have a dash in their name (in some of the data sets) and sometimes the dash separates the location. 
+I want to discriminate between them. 
+
+```{r}
+
+tuition_cost <- tuition_cost %>% 
+  mutate(board_option = ifelse(is.na(room_and_board), FALSE, TRUE)) 
+
+```
+
+Not all colleges have an option to take room and board with the college, I created a seperate column to reflect this. 
+
+### Exploration in_state_tuition correlations
+
+```{r}
+
+library(ggplot2)
+
+tuition_cost %>% 
+  ggplot(aes(x=in_state_tuition, y=out_of_state_tuition, col=type)) +
+  geom_point() +
+  ggtitle("Tuition for in- vs out of state students", 
+          subtitle = "Public schools ask for more from out of state students")
+
+```
+
+```{r}
+
+tuition_cost %>% 
+  mutate(state_code = forcats::fct_reorder(state_code, in_state_tuition)) %>% 
+  ggplot(aes(x=state_code, y=in_state_tuition)) + 
+  geom_boxplot() +
+  ggtitle("In state tuition per state", 
+          subtitle = "Some states are clearly more expensive than others")
+tuition_cost %>% 
+  mutate(state_code = forcats::fct_reorder(state_code, in_state_tuition)) %>% 
+  ggplot(aes(x=state_code, y=in_state_tuition)) + 
+  geom_boxplot() + 
+  facet_grid(type ~ . ) +
+  ggtitle("In state tuition per state", 
+          subtitle = "This difference could be due to the number of private schools in some states")
+
+```
+
+```{r}
+
+tuition_cost %>% 
+  ggplot(aes(x=degree_length, y=in_state_tuition, group=type, col=type)) + 
+  geom_jitter() +
+  ggtitle("Tuition vs length of degree", 
+          subtitle = "Is there a cap on how expensive 2 year programs are allowed to be?")
+
+```
+
+The majority of two year programs is Public. 
+However, even comparing only Public colleges, two year progams are cheaper, almost like there is an invisible line at the 5600 mark. 
+
+```{r}
+
+tuition_cost %>% 
+  ggplot(aes(x=board_option, y=in_state_tuition, group=type, col=type)) + 
+  geom_jitter() +
+  ggtitle("Tuition vs the option of boarding", 
+          subtitle = "This looks very similar to the 2 vs 4 year split")
+
+```
+
+```{r}
+
+tuition_cost %>% 
+  ggplot(aes(x=nchar(name), y=in_state_tuition, col=type)) + 
+  geom_jitter(alpha=0.2) +
+  ggtitle("length of college name vs tuition", 
+          subtitle = "Private colleges tend to have shorter names")
+
+```
+
+### Model in_state_tuition
+
+Not sure I want to pursue this right now. 
+
+```{r}
+
+library(tidymodels)
+library(stringr)
+
+lm_model <- linear_reg() %>%
+  set_engine("lm") %>%
+  fit(in_state_tuition ~ state_code + type + degree_length + board_option,  tuition_cost)
+
+tidy(lm_model)
+
+tidy(lm_model) %>% filter(!str_detect(term, "state_code"))
+
+```
+
+## tuition_income
+
+This is data about how much people are likely to pay for their education, depending on their household income. 
+
+```{r}
+
+skimr::skim(tuition_income)
+
+```
+
+### Variables
+
+```{r}
+
+sum(!unique(tuition_income$state) %in% tuition_cost$state_code)
+unique(tuition_income$state)[which(!unique(tuition_income$state) %in% state.abb)]
+
+```
+
+The only non-state state in this dataset is DC. 
+Fortunately this state is accounted for in `tuition_cost`. 
+
+```{r}
+
+duplicate_names <- tuition_income %>% select(name, state) %>% unique() %>% count(name) %>% filter(n > 1) %>% pull(name)
+
+```
+
+Here too, we have some duplicate College names. 
+
+```{r}
+
+cost_unique_names <- unique(tuition_cost$name)[!unique(tuition_cost$name) %in% tuition_income$name]
+income_unique_names <- unique(tuition_income$name)[(!unique(tuition_income$name) %in% tuition_cost$name)]
+shared_names <- unique(tuition_income$name)[(unique(tuition_income$name) %in% tuition_cost$name)]
+
+tibble("cost_unique_names"=length(cost_unique_names), "income_unique_names"=length(income_unique_names), "shared_names"=length(shared_names))
+
+head(cost_unique_names)
+tibble(income_unique_names) %>% filter(str_detect(income_unique_names, "Alliant"))
+
+```
+
+I am clearly missing some names. 
+This could be largely due the fact that `tuition_income` regularly gives a region indication in the name column. 
+Let's see if we can account for this. 
+
+Note also that I have doubles in the 
+
+```{r}
+
+
+
+```
+
+## salary_potential
+
+This is data about how much people are expected to be paid later in their carreer, the percentage of people graduating in stem, and the percentage of graduates that feel they make the world a better places. 
+
+```{r}
+
+skimr::skim(salary_potential)
+
+```
+
+### Variables
+
+```{r}
+
+unique(salary_potential$state_name) %>% length()
+unique(salary_potential$state_name)[!unique(salary_potential$state_name) %in% state.name]
+
+salary_potential %>% 
+  mutate(state_name = str_replace(state_name, "-", " ")) %>% 
+  filter(!state_name %in% state.name) %>% 
+  pull(state_name) %>% 
+  unique() %>% 
+  length()
+
+salary_potential <- salary_potential %>% 
+  mutate(state_name = str_replace(state_name, "-", " ")) 
+
+```
+
+Expected number of state names. 
+However, the spaces were dashes. 
+That is now fixed. 
+
+```{r eval=FALSE}
+
+unique(salary_potential$name) %in% 
+  tuition_cost$name %>% 
+  sum()
+
+max_characters <- sapply(unique(salary_potential$name), nchar) %>% max() + 1
+
+tibble(sp_name = unique(salary_potential$name)) %>%
+  rowwise() %>% 
+  mutate(in_tc_1 = (sp_name %in% tuition_cost$name)) %>%
+  mutate(sp_name = ifelse(substr(sp_name, start = 1, stop = 4) == "The " & !in_tc_1,  
+                           substr(sp_name, start =5, stop = max_characters), 
+                           sp_name)) %>%
+  rowwise() %>% 
+  mutate(in_tc_2 = (sp_name %in% tuition_cost$name)) 
+
+# tuition_cost$name[grep(pattern = "Birmingham", x = tuition_cost$name) %>% head()]
+
+to_filter_out <- tibble(name = salary_potential$name) %>% 
+  filter(grepl(name, pattern = "-")) %>% 
+  rowwise %>% mutate(n_char = length(which(strsplit(name, "")[[1]]=="-"))) %>% 
+  filter(n_char > 1) %>% 
+  pull(name)
+
+tibble(name = unique(salary_potential$name)) %>%
+  filter(!name %in% to_filter_out) %>%
+  rowwise() %>% 
+  mutate(dash_pos = gregexpr(name, pattern = "-") %>% unlist, 
+         relative_pos = dash_pos / (nchar(name)), 
+         name = case_when(dash_pos > 0 & relative_pos < 0.5 ~ str_replace(name, "-", " "), 
+                          dash_pos > 0 & relative_pos > 0.5 ~ substr(name, start = 1, stop = dash_pos), 
+                          TRUE ~ name)) %>% 
+
+```
+
+I have a dashing problem. 
+Some colleges have a dash in their name (in some of the data sets) and sometimes the dash separates the location. 
+I want to discriminate between them. 
+
+```{r}
+
+salary_potential %>% 
+  group_by(state_name) %>% 
+  dplyr::summarise(min_rank = min(rank), 
+                   max_rank = max(rank), 
+                   number_schools = n()) %>% 
+  head()
+
+```
+
+Just to make sure I understand `rank` correctly. 
+It indeed is an index within eahc state, where `1` indicates the highest earning potential, and the largest number, dependent on the number of schools in the state, indicates the school with the lowest earning potential. 
+
+```{r}
+
+salary_potential %>% 
+  ggplot(aes(x=early_career_pay, y=mid_career_pay)) + 
+  geom_point() +
+  ggtitle("Early vs mid career pay", 
+          subtitle = "Early and mid career pay correlate very well")
+
+```
+
+The high correlation between early and mid career pay would allow me to take only one to try out later analyses. 
+
+### Exploration
+
+- Do min income and max income within a state correlate?
+- Do states with more schools have a more extreme income potential?
+
+```{r}
+
+salary_potential %>% 
+  group_by(state_name) %>% 
+  mutate(rank_percent = rank / max(rank)) %>% 
+  ggplot(aes(x=stem_percent, y=make_world_better_percent, col=rank_percent)) + 
+  geom_jitter() +
+  ggtitle("Stem vs MTWB percentage", 
+          subtitle = "Colleges with low STEM percentage rank lower in earnings")
+
+```
+
+## Possible questions, combining data
+
+I noticed that private vs public was a major confounder in `tuition_cost`, keep this in mind in all analyses. 
+
+- Is the income potential dependent on the tuition? (salary_potential x tuition_cost)
+- Is income potential dependent on the discrepency between what high and low income families pay? (tuition_income x salary_potential) 
+- Does a higher tuition correlate with a higher `make_world_better_stat`?
+- Do private colleges offer more funding for low-income families? (tuition_income x tuition_cost)
+
+
+
+
+
+

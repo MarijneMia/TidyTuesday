@@ -1,0 +1,382 @@
+---
+title: "20200317_tidy_tuesday"
+output: html_document
+---
+
+This weeks data is all about the (American) Office's episode ratings. 
+One of the variables is of `date` type, I have little experience with this. 
+It would be cool to learn more about that. 
+
+```{r}
+
+tuesdata <- tidytuesdayR::tt_load(2020, week = 12)
+
+office_ratings <- tuesdata$office_ratings
+schrute_data <- schrute::theoffice
+
+```
+
+## Exploration
+
+### office_ratings
+
+```{r}
+
+skimr::skim(office_ratings)
+
+```
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(scales)
+
+office_ratings %>% 
+  dplyr::count(season) %>% 
+  ggplot(aes(x=factor(season), y=n)) + 
+  geom_bar(stat="identity") +
+  ggtitle("Number of episodes per season", 
+          subtitle = "Season 4 has far fewer rated episodes")
+
+```
+
+Season 4 has 19 episodes accoring to [Wikipedia](https://en.wikipedia.org/wiki/The_Office_(American_season_4)). 
+This season has multiple "double" episodes, meaning that two episode are squished togther, with one name and storyline. 
+These are apparently rated as 1 by the IMDB system. 
+
+```{r}
+
+office_ratings %>% 
+  ggplot(aes(x=factor(season), y=imdb_rating, fill = factor(season))) + 
+  geom_boxplot() + 
+  theme(legend.position = "none") + 
+  ggtitle("Ratings per season")
+
+office_ratings %>% 
+  ggplot(aes(x=factor(season), y=total_votes, fill = factor(season))) + 
+  geom_boxplot() + 
+  theme(legend.position = "none") + 
+  ggtitle("Number of votes per season", 
+          subtitle = "Generally, people vote less often for later season.")
+
+office_ratings %>% 
+  ggplot(aes(x=total_votes, y=imdb_rating)) + 
+  geom_text(aes(label = episode)) + 
+  theme(legend.position = "none") + 
+  facet_wrap(season ~ . ) +
+  ggtitle("#votes vs IMDB score", 
+          subtitle = "It appears that more votes means higher score") 
+
+office_ratings %>% 
+  group_by(season) %>% 
+  mutate(season_n = n()) %>% 
+  rowwise() %>% 
+  mutate(ep_season =rescale(episode, from=c(1,season_n))) %>%
+  ggplot(aes(x=ep_season, y=imdb_rating, group=season, col=factor(season))) +
+  geom_line() +
+  ggtitle("Progression of score over the season")
+
+office_ratings %>% 
+  rowwise() %>% 
+  mutate(month = months(air_date)) %>% 
+  ungroup() %>% 
+  dplyr::count(season, month) %>% 
+  spread(key = season, value = n) %>% 
+  mutate(month = factor(month, levels = month.name)) %>% 
+  arrange(month)
+
+```
+
+### schrute_data
+
+```{r}
+
+skimr::skim(schrute_data)
+
+```
+
+I see that both season and episode are classified as character, let's remedy that. 
+
+```{r}
+
+unique(schrute_data$season)
+unique(schrute_data$episode)
+
+schrute_data %>% 
+  mutate(season = as.numeric(season)) %>% 
+  count(is.na(season))
+
+schrute_data %>% 
+  mutate(episode = as.numeric(episode)) %>% 
+  count(is.na(episode))
+
+schrute_data <- schrute_data %>%
+  mutate(episode = as.numeric(episode), 
+         season = as.numeric(season))
+
+```
+
+I have decided to look at the rating of the episode vs the amount of female influence, eg. female director/writer/cast. 
+I would also like to look at the number of lines per female character, similar to that of the oscar speeches. 
+
+#### Directors
+
+I'll start with asigning gender to the writers and directors.
+
+```{r}
+
+
+unique(schrute_data$director) %>% head()
+
+schrute_data %>% 
+  select(season, episode, director) %>% 
+  unique() %>% 
+  filter(grepl(";",director))
+
+schrute_data_directors <- schrute_data %>% 
+  select(season, episode, director) %>% 
+  unique() %>% 
+  filter(!grepl(";",director))
+
+```
+
+For the directors, there are only three episodes with shared director, I am okay with losing those data. 
+
+```{r}
+
+library(stringr)
+
+schrute_data_directors %>% 
+  rowwise() %>% 
+  mutate(n_spaces = str_count(string = director, pattern = " ")) %>%
+  count(n_spaces)
+
+schrute_data_directors %>% 
+  rowwise() %>% 
+  mutate(n_spaces = str_count(string = director, pattern = " ")) %>%
+  filter(n_spaces > 1) 
+
+```
+
+Only Victor Nelli Jr. has a difficult name. 
+This will cause the warning that for two rows I provide too few colnames, this is okay. 
+
+```{r}
+
+library(gender)
+
+gender_directors <- schrute_data_directors %>% 
+  separate(director, into = c("first_name", "last_name"), sep = " ") %>% 
+  pull(first_name) %>% 
+  unique() %>% 
+  gender()
+
+schrute_data_directors <- schrute_data_directors %>% 
+    separate(director, into = c("first_name", "last_name"), sep = " ") %>% 
+  left_join(gender_directors[,c(1,4)], by=c("first_name"="name")) 
+
+schrute_data_directors %>% 
+  count(gender) %>% 
+  ggplot(aes(x=gender, y=n, fill=gender)) + 
+  geom_histogram(stat="identity") +
+  ggtitle("Number of directors for men and women", 
+          subtitle = "I knew it would be bad, but this is extreme")
+
+schrute_data_directors %>% 
+    count(season, gender) %>% 
+  filter(!is.na(gender)) %>% 
+  spread(key=gender, value=n) %>% 
+  replace_na(list("male"=0, "female"=0)) %>% 
+  mutate(percent_male = male / (male+female), 
+         percent_female = 1 - percent_male) %>%
+  select(season, percent_male, percent_female) %>%
+  gather(key = "gender", value = "percent", -season) %>%
+  ggplot(aes(x=factor(season), y=percent, fill=gender)) + 
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = scales::percent) +
+  ggtitle("Percentage of directors for men and women per season", 
+          subtitle = "Arguably it is getting slowly more even..")
+
+```
+
+I feel I need to note here that `NA` means that the name is unconvincingly male or female, not that the director is necessarily non-binary. 
+
+#### Writers
+
+```{r}
+
+unique(schrute_data$writer) %>% head()
+
+schrute_data %>% 
+  select(season, episode, writer) %>% 
+  unique() %>% 
+  rowwise() %>% 
+  mutate(n_writers = str_count(string = writer, pattern = ";") + 1) %>% 
+  count(n_writers)
+
+schrute_data_writers <- schrute_data %>% 
+  select(season, episode, writer) %>% 
+  unique() %>% 
+  rowwise() %>% 
+  mutate(n_writers = str_count(string = writer, pattern = ";") + 1) %>% 
+  filter(n_writers == 1) %>% 
+  select(-n_writers) 
+  
+```
+
+I will ignore episodes with multiple writers as well for now. 
+
+```{r}
+
+schrute_data_writers %>% 
+  rowwise() %>% 
+  mutate(n_spaces = str_count(string = writer, pattern = " ")) %>%
+  filter(n_spaces > 1) 
+
+```
+
+Anthony still has a useful first name. 
+I will have to ignore his last name. 
+
+```{r}
+
+gender_writers <- schrute_data_writers %>% 
+  separate(writer, into = c("first_name", "last_name"), sep = " ") %>% 
+  pull(first_name) %>% 
+  unique() %>% 
+  gender()
+
+schrute_data_writers <- schrute_data_writers %>% 
+    separate(writer, into = c("first_name", "last_name"), sep = " ") %>% 
+  left_join(gender_writers[,c(1,4)], by=c("first_name"="name")) 
+
+```
+
+```{r}
+
+schrute_data_writers %>% 
+  count(gender) %>% 
+  ggplot(aes(x=gender, y=n, fill=gender)) + 
+  geom_histogram(stat="identity") +
+  ggtitle("Number of directors for men and women", 
+          subtitle = "This is already far better than the directors")
+
+schrute_data_writers %>% 
+    count(season, gender) %>% 
+  filter(!is.na(gender)) %>% 
+  spread(key=gender, value=n) %>% 
+  replace_na(list("male"=0, "female"=0)) %>% 
+  mutate(percent_male = male / (male+female), 
+         percent_female = 1 - percent_male) %>%
+  select(season, percent_male, percent_female) %>%
+  gather(key = "gender", value = "percent", -season) %>%
+  ggplot(aes(x=factor(season), y=percent, fill=gender)) + 
+  geom_bar(stat = "identity") +
+  scale_y_continuous(labels = scales::percent) +
+  ggtitle("Percentage of directors for men and women per season", 
+          subtitle = "I suppose this is sortof stable, which is a little dissapointing.")
+
+```
+
+#### Female characters
+
+```{r}
+
+character_genders <- schrute_data %>% 
+  separate(character, c("first_name", "second_name"), sep = " ") %>% 
+  pull(first_name) %>% 
+  unique() %>% 
+  gender()
+
+```
+
+There are a ton of characters that do not have a neat first_name last_name structure. 
+That is okay. 
+
+```{r}
+
+schrute_data %>% 
+  select(character) %>% 
+  unique() %>% 
+  separate(character, c("first_name", "second_name"), sep = " ") %>% 
+  left_join(character_genders[,c(1,4)], by=c("first_name"="name")) %>% 
+  filter(is.na(gender)) %>% 
+  count(first_name) %>% 
+  arrange(desc(n))
+
+characters_interest <- schrute_data %>% 
+    select(season, character) %>% 
+  unique() %>% 
+  count(character) %>% filter(n > 2) %>%
+  left_join(character_genders[,c(1,4)], 
+            by=c("character"="name")) %>% 
+  filter(!is.na(gender)) %>%
+  pull(character)
+
+schrute_data %>% 
+  select(season, episode, character, text) %>% 
+  filter(character %in% characters_interest) %>%
+  left_join(character_genders[,c(1,4)], by=c("character"="name")) %>%
+  group_by(season, episode) %>% 
+  count(gender) %>% 
+  spread(key = gender, value = n) %>% 
+  mutate(percent_male_lines = male / (male + female),
+         percent_female_lines = 1 - percent_male_lines) %>% 
+  select(season, episode, percent_male_lines, percent_female_lines) %>% 
+  gather(key = gender, value = percent, -season, -episode) %>%
+  ggplot(aes(x=factor(season), y=percent, col=gender)) +
+  geom_jitter()
+
+```
+
+There are some interesting things in here, but let's focus on named characters that recur in at least three seasons. 
+I selected characters who are known by only their first name and appear in at least three seasons. 
+To me this indicates they are important enough to have sufficient lines to be interesting to compare. 
+
+```{r}
+
+character_genders %>% 
+  filter(name %in% characters_interest) %>% 
+  count(gender) %>% 
+  ggplot(aes(x = gender, y=n, fill=gender)) + 
+  geom_histogram(stat = "identity") +
+  ggtitle("Number of men and women in my selection", 
+          subtitle = "Why is this not surprising anymore")
+
+
+```
+
+```{r}
+
+schrute_data %>% 
+  filter(character %in% characters_interest) %>% 
+  rowwise() %>% 
+  mutate(n_words_line = str_count(string = text, pattern = " ") + 1) %>%
+  select(season, episode, writer, character, n_words_line) %>%
+  left_join(character_genders[,c(1,4)], by=c("character"="name")) %>%
+  ggplot(aes(x=gender, y=log2(n_words_line))) + 
+  geom_violin() +
+  ggtitle("Number or words per line for each gender" + 
+            subtitle = "When speaking, both genderes get a similar number of words in a line")
+
+
+```
+
+
+### Plain correlations
+
+```{r}
+
+office_ratings %>% 
+  select(season, episode, imdb_rating) %>%
+  left_join(schrute_data_writers, by=c("season", "episode")) %>%
+  na.omit() %>% 
+  ggplot(aes(x=gender, y=imdb_rating)) + 
+  ggbeeswarm::geom_beeswarm() +
+  ggtitle("Ratings for episodes by female vs male writers")
+
+```
+
+
