@@ -1,0 +1,94 @@
+---
+title: "week21"
+output: html_document
+---
+
+```{r}
+
+library(tidyverse)
+
+vb_matches <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-19/vb_matches.csv', guess_max = 76000)
+
+```
+
+```{r}
+
+skimr::skim(vb_matches)
+
+```
+
+The current dataset contains more NAs than I care for. 
+I'd rather separate the data about the match, player data, and match_player info. 
+
+## Exploring
+
+```{r}
+
+library(kableExtra)
+
+vb_matches %>% 
+  select(contains("hgt")) %>% 
+  pivot_longer(cols = everything(), 
+               names_to = c("win", "player", "height"), 
+               names_sep = "_") %>% 
+  select(-height) %>%
+  ggplot(aes(x=win, y=value, fill=win)) +
+  geom_boxplot() +
+  ggtitle("Winners are more likely to be taller. ")
+
+vb_matches %>% 
+  select(contains("hgt"), contains("age")) %>% 
+  pivot_longer(cols = everything(), 
+               names_to = c("win", "player", "measure"), 
+               names_sep = "_") %>% 
+  filter(!is.na(value)) %>%
+  group_by(win, measure) %>%
+  nest() %>%
+  pivot_wider(names_from = win, values_from = data) %>%
+  mutate(
+    t_test = map2(w, l, ~{t.test(.x$value, .y$value) %>% tidy()}),
+    w = map(w, nrow),
+    l = map(l, nrow)
+  ) %>% 
+  unnest(cols = c(w, l, t_test)) %>% 
+  select(measure, w, l, contains("estimate"), 
+         p_value = p.value, method, alternative) %>%
+  kable(format = "html", caption = "Winners are taller and older") %>%
+  kable_styling(full_width = FALSE)
+
+vb_matches %>% 
+  select(contains("country")) %>%  
+  filter(w_p1_country == w_p2_country, 
+         l_p1_country == l_p2_country) %>% 
+  select(country, w_country = w_p1_country, l_country = l_p1_country) %>%
+  pivot_longer(cols = -country) %>% 
+  count(name, value == country) %>%
+  pivot_wider(values_from = n, names_from = name) %>%
+  kable(caption = "Playing in home country does not strongy affect winning chances") %>%
+  kable_styling(full_width = FALSE)
+
+
+vb_matches %>% 
+    select(contains("_country"), gender) %>%  
+    filter(w_p1_country == w_p2_country, 
+           l_p1_country == l_p2_country) %>% 
+  select(gender, w_country = w_p1_country, l_country = l_p1_country) %>%
+  pivot_longer(cols = -gender) %>% 
+  mutate(value = fct_lump(value, n = 600)) %>% 
+  group_by(gender, name, value) %>%
+  count() %>%  
+  pivot_wider(values_from = n, names_from = gender) %>% 
+  filter(!is.na(M) & !is.na(W) & name == "w_country") %>% 
+  select(win = name, country= value, M, W) %>% 
+  pivot_longer(cols = M:W) %>% 
+  ggplot(aes(x=fct_reorder(country, value), y=value, fill=name)) +
+  geom_bar(stat = "identity", position = "fill") +
+  coord_flip()
+
+```
+
+
+## Ideas
+
+Length differences predicting wins. 
+
