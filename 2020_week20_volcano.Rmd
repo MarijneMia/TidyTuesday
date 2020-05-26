@@ -1,0 +1,52 @@
+---
+title: "week20"
+output: html_document
+---
+
+```{r}
+
+library(tidyverse)
+
+volcano <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-12/volcano.csv')
+eruptions <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-12/eruptions.csv')
+events <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-12/events.csv')
+
+world <- read.csv("https://data.un.org/_Docs/SYB/CSV/SYB62_1_201907_Population,%20Surface%20Area%20and%20Density.csv")
+
+```
+
+```{r}
+
+library(ggtextures)
+
+image_data <- c(
+    "~/Documents/A_computer_hobbies/R_projects/TidyTuesday/LITHOLOGY/ANDESITE.PNG",
+    "~/Documents/A_computer_hobbies/R_projects/TidyTuesday/LITHOLOGY/BASALT.PNG", 
+    "~/Documents/A_computer_hobbies/R_projects/TidyTuesday/LITHOLOGY/RHYODACITE.PNG",
+    "~/Documents/A_computer_hobbies/R_projects/TidyTuesday/LITHOLOGY/BASLT2.PNG", 
+    "~/Documents/A_computer_hobbies/R_projects/TidyTuesday/LITHOLOGY/RHYOLITE.PNG", 
+    "~/Documents/A_computer_hobbies/R_projects/TidyTuesday/LITHOLOGY/11.PNG", 
+    "~/Documents/A_computer_hobbies/R_projects/TidyTuesday/LITHOLOGY/33.PNG", 
+    "~/Documents/A_computer_hobbies/R_projects/TidyTuesday/LITHOLOGY/TALC.PNG", 
+    "~/Documents/A_computer_hobbies/R_projects/TidyTuesday/LITHOLOGY/PHYLITE.PNG", 
+    "~/Documents/A_computer_hobbies/R_projects/TidyTuesday/LITHOLOGY/TREMOLITE.PNG")
+ names(image_data) <- unique(volcano$major_rock_1) %>% sort()
+
+volcano %>% 
+  mutate(country_lump = fct_lump(country, n = 15) %>%
+           fct_infreq(), 
+         major_rock_1 = fct_infreq(major_rock_1)) %>%
+  group_by(country_lump, major_rock_1) %>% 
+  count() %>% 
+  ggplot(aes(x=country_lump, y=n, image = major_rock_1)) + 
+  geom_textured_col(stat = "identity", position="fill") +
+  scale_y_continuous(labels = scales::percent, expand = c(0,0)) +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ggtitle("Distribution of major rock types per region", 
+          subtitle = "XX is the most common rock type.") +
+  xlab("Region") + ylab("") +
+  scale_image_manual(values = image_data)
+
+```
+
