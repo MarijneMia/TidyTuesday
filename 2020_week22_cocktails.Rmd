@@ -1,0 +1,63 @@
+---
+title: "2020_week22_cocktails"
+output: html_document
+---
+
+
+```{r}
+
+library(tidyverse)
+
+cocktails <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-26/cocktails.csv')
+boston_cocktails <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-05-26/boston_cocktails.csv')
+
+```
+
+```{r}
+
+cocktails %>% count(row_id) %>% nrow()
+
+cocktails %>% 
+  count(row_id) %>% 
+  ggplot(aes(x=n)) + 
+  geom_bar() +
+  ggtitle("mMst drinks have around 3-4 ingredients")
+
+cocktails %>% 
+  select(row_id, glass) %>% 
+  distinct() %>% count(glass) %>% 
+  ggplot(aes(x=fct_reorder(glass, n), y=n)) + 
+  geom_bar(stat = "identity") + 
+  coord_flip() +
+  ggtitle("The cocktail glass is the most popular glass")
+
+cocktails %>% 
+  select(row_id, category) %>% 
+  distinct() %>% 
+  count(category) %>% 
+  ggplot(aes(x=fct_reorder(category, n), y=n)) + 
+  geom_bar(stat = "identity") + 
+  coord_flip() +
+  ggtitle("the Ordinary drink is the most popular")
+
+```
+
+There are 546 drinks in this database. 
+
+```{r}
+
+cocktails %>% 
+  count(ingredient, sort = TRUE) %>% 
+  head(n=3) %>% 
+  pull(ingredient)
+
+cocktails %>% 
+  group_by(row_id) %>% filter("Vodka" %in% ingredient,
+                              "Gin" %in% ingredient, 
+                              "Sugar" %in% ingredient) %>% 
+  pull(drink) %>%
+  unique()
+
+```
+
+The jitterbug contains all three most popular ingredients. 
