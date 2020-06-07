@@ -1,0 +1,136 @@
+---
+title: "2020_week23"
+output: html_document
+---
+
+```{r}
+
+library(tidyverse)
+library(colorspace)
+
+marbles <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-06-02/marbles.csv')
+
+
+```
+
+Colors from: https://github.com/gkaramanis/tidytuesday/blob/master/2020-week23/marbles-race.R
+
+```{r}
+
+teams <- tribble(
+  ~team_name, ~team_colour,
+  "Balls of Chaos", "#BC4D21",
+  "Green Ducks", "#656F3C",
+  "Hazers", "#636363",
+  "Hornets", "#D2C642",
+  "Limers", "#AEC956",
+  "Mellow Yellow", "#fbd75e",
+  "Midnight Wisps", "#85CEF2",
+  "O'rangers", "#EE7930",
+  "Raspberry Racers", "#CD3C4E",
+  "Rojo Rollers", "#D6554f",
+  "Savage Speeders", "#872E18",
+  "Snowballs", "#9BBAE5",
+  "Team Galactic", "#9162D7",
+  "Team Momo", "#6A9655",
+  "Team Primary", "#D9B042",
+  "Thunderbolts", "#2B54A7"
+) 
+
+darken(team_colour)
+
+```
+
+
+```{r}
+
+marbles %>% 
+  mutate(race = fct_reorder(race, date)) %>% 
+  group_by(race) %>%
+  mutate(time_lap_norm = scales::rescale(avg_time_lap)) %>%
+  ggplot(aes(x=race, y=time_lap_norm, col=team_name)) + 
+  geom_point()
+
+plot1 <- marbles %>% 
+  mutate(race = fct_reorder(race, date)) %>% 
+  group_by(race) %>% mutate(time_lap_norm = scales::rescale(avg_time_lap)) %>%
+  left_join(teams, by="team_name") %>%
+  ggplot(aes(x=fct_rev(fct_reorder(team_name, time_lap_norm)), 
+             y=time_lap_norm, fill=team_colour)) + 
+  geom_boxplot() +
+  scale_fill_identity() +
+  coord_flip() +
+  ggtitle("Normalized time per laps") +
+  scale_y_continuous(breaks = c(0,1), labels = c(0,1), 
+                     name = "Normalized lap time", expand = c(0,0)) +
+  scale_x_discrete(name = "") +
+  theme(
+    plot.background = element_rect(colour = "grey65", fill = "grey65"),
+    panel.border = element_rect(colour = "black", fill=NA, size = 2),
+    panel.background = element_rect(fill = "grey40"), 
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), 
+    axis.text.x = element_text(face="bold", color="grey15"), 
+    axis.text.y = element_text(face="bold", color="grey15"), 
+    plot.title = element_text(face="bold", color="grey15"), 
+    plot.subtitle = element_text(face="bold", color="grey15"),
+    plot.margin = margin(10, 20, 10, 10), 
+    axis.title = element_text(face="bold", color="grey15")
+  ) 
+
+```
+
+
+```{r}
+
+marbles_plot <- marbles %>% 
+  mutate(race = fct_reorder(race, date)) %>%
+  filter(!is.na(time_s )) %>% 
+  group_by(race) %>% 
+  mutate(top3 = ifelse(time_s <= sort(time_s)[3], TRUE, FALSE)) %>% 
+  select(race, marble_name, team_name, top3, time_s) %>% 
+  ungroup() %>% 
+  count(team_name, top3) %>% 
+  left_join(teams, by="team_name") %>%
+  pivot_wider(names_from = top3, values_from = n) %>%
+  replace_na(list(`FALSE` = 0, `TRUE` = 0)) %>% 
+  mutate(team_name = fct_reorder(team_name, `TRUE` / `FALSE`)) %>%
+  pivot_longer(cols = c(`FALSE`, `TRUE`)) %>% 
+  mutate(team_colour = ifelse(name == TRUE, 
+                             team_colour, 
+                             desaturate(lighten(team_colour, 0.5)))) 
+
+plot2 <- marbles_plot %>% 
+  ggplot(aes(x=team_name, y=value, group = name, fill = team_colour)) +
+  geom_bar(stat = "identity", position = "fill", color = "black") +
+  scale_fill_identity() +
+  scale_y_continuous(labels = scales::percent, 
+                     name = "Percentage of races on the podium", expand = c(0,0), 
+                     breaks = c(0,1)) +
+  scale_x_discrete(name = "") +
+  coord_flip() + 
+  ggtitle("Top Podium Climbers") +
+  theme(
+    plot.background = element_rect(colour = "grey65", fill = "grey65"),
+    panel.border = element_rect(colour = "black", fill=NA, size = 2),
+    panel.background = element_rect(fill = "grey40"), 
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), 
+    axis.text.x = element_text(face="bold", color="grey15"), 
+    axis.text.y = element_text(face="bold", color="grey15"), 
+    plot.title = element_text(face="bold", color="grey15"), 
+    plot.subtitle = element_text(face="bold", color="grey15"),
+    plot.margin = margin(10, 20, 10, 10), 
+    axis.title = element_text(face="bold", color="grey15")
+  ) 
+
+
+plot2 / plot1
+
+```
+
+
+
+
+
+
