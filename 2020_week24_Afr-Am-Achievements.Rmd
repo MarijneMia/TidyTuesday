@@ -1,0 +1,41 @@
+---
+title: "2020_week24"
+output: html_document
+---
+
+
+```{r}
+
+library(tidyverse)
+
+firsts <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-06-09/firsts.csv')
+science <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-06-09/science.csv')
+
+school_diversity <- readr::read_csv("https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2019/2019-09-24/school_diversity.csv")
+
+```
+
+## Exploration
+
+```{r}
+
+firsts %>% 
+  ggplot(aes(x=year, fill=category)) +
+  geom_histogram(position="dodge") +
+  facet_grid(category ~ .)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
