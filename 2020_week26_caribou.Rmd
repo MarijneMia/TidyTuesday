@@ -1,0 +1,104 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+With help from this [tutorial](https://www.datanovia.com/en/blog/gganimate-how-to-create-plots-with-beautiful-animation-in-r/). 
+
+```{r}
+
+library(tidyverse)
+library(gganimate)
+
+tuesdata <- tidytuesdayR::tt_load(2020, week = 26)
+
+individuals <- tuesdata$individuals
+locations <- tuesdata$locations
+
+```
+
+```{r}
+
+colors <- c("#7F9BAA","#4C442C","#5a798a","#776749","#222211","#A8906E","#C6C3BD","#F0EFEE")
+
+```
+
+```{r}
+
+locations %>% 
+  mutate(year = lubridate::year(timestamp)) %>%
+  filter(season == "Summer") %>% 
+  ggplot(aes(x=latitude, y=longitude)) + 
+  geom_hex() +
+  transition_time(year) +
+  labs(title = "Year: {frame_time}") +
+  shadow_wake(wake_length = 0.1, alpha = FALSE) 
+  
+locations %>% 
+  mutate(year = lubridate::year(timestamp)) %>% 
+  count(season, year) %>% 
+  ggplot(aes(x=year, y=n, fill=season)) + 
+  geom_bar(stat = "identity", position = "dodge")
+
+```
+
+```{r}
+
+dat_df <- locations %>% 
+  mutate(year = lubridate::year(timestamp), 
+         date = as.Date(timestamp), 
+         longitude = plyr::round_any(longitude, 0.1), 
+         latitude = plyr::round_any(latitude, 0.1)) %>%
+  filter(year >= 2000) %>%
+  select(animal_id, season, date, longitude, latitude) %>% 
+  unique() %>%
+  left_join(individuals %>% select(animal_id, study_site), by="animal_id") %>%
+  group_by(study_site, date, longitude, latitude) %>% 
+  count() 
+
+dat_df %>% 
+  ggplot(aes(x=latitude, y=longitude, alpha=n, color = study_site)) +
+  geom_jitter(size = 8) + 
+  scale_color_manual(values = colors, name = "Herd") +
+  scale_alpha_continuous(range = c(0.1, 0.5), name = "Number of individuals") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "#a6ba91", 
+                                        color = "#222211"), 
+        plot.background = element_rect(fill = "#758565"), 
+        text = element_text(colour = "#222211"), 
+        axis.text.x = element_text(color="#776749"), 
+        axis.text.y = element_text(color="#776749")) +
+  transition_time(date) +
+  labs(title = "Date: {frame_time}", 
+       subtitle = "Movement of Caribou herds") +
+  shadow_wake(wake_length = 0.1, alpha = FALSE) 
+anim_save("./TidyTuesday/caribou.gif")
+
+```
+
+
+# Tutorial using gganimate:
+```{r}
+# From here: https://www.datanovia.com/en/blog/gganimate-how-to-create-plots-with-beautiful-animation-in-r/
+library(ggplot2)
+library(gganimate)
+library(gapminder)
+head(gapminder)
+p <- ggplot(
+  gapminder, 
+  aes(x = gdpPercap, y=lifeExp, size = pop, colour = country)
+  ) +
+  geom_point(show.legend = FALSE, alpha = 0.7) +
+  scale_color_viridis_d() +
+  scale_size(range = c(2, 12)) +
+  scale_x_log10() +
+  labs(x = "GDP per capita", y = "Life expectancy")
+p
+# animate requires transition_time
+p2 = p + transition_time(year) +
+  labs(title = "Year: {frame_time}")
+p3 = p2 +
+  shadow_wake(wake_length = 0.1, alpha = FALSE) # wake = proportion of the total animation, for tails
+animate(p2)
+anim_save("~/Desktop/gdp.gif")
+```
