@@ -1,0 +1,74 @@
+---
+title: "Afr-Am_history"
+output: html_document
+---
+
+```{r}
+
+library(tidyverse)
+
+blackpast <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-06-16/blackpast.csv')
+census <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-06-16/census.csv')
+slave_routes <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-06-16/slave_routes.csv')
+african_names <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-06-16/african_names.csv')
+
+
+```
+
+## first exploration
+
+```{r}
+
+blackpast <- blackpast %>% mutate(year = as.numeric(year))
+
+blackpast %>% 
+  filter(country == "United States") %>%
+  mutate(subject = fct_lump(subject, 20), 
+         year = plyr::round_any(year, 10, ceiling)) %>%
+  ggplot(aes(x=year, fill=subject)) + 
+  geom_bar()
+
+blackpast %>% 
+  mutate(subject = fct_lump(subject, 20), 
+         year = plyr::round_any(year, 10, ceiling)) %>%
+  ggplot(aes(x=year, fill=subject)) + 
+  geom_bar()
+
+blackpast %>% 
+  filter(country == "Colonial America") %>%
+  mutate(subject = fct_lump(subject, 4), 
+         year = plyr::round_any(year, 10, ceiling)) %>%
+  ggplot(aes(x=year, fill=subject)) + 
+  geom_bar()
+
+blackpast_abolition <- blackpast %>% 
+  filter(year >= 1790, 
+         year <= 1870, 
+         country == "United States", 
+         subject %in% c("The Abolition Movement","Black Politics", "Racial Violence" )) %>%
+  mutate(year = as.numeric(year))
+
+census %>% pivot_longer(cols = 4:8) %>%
+  ggplot(aes(x=year, y=value, col=name)) +
+  geom_line() + 
+  facet_grid(region~division)
+
+census %>% 
+  pivot_longer(cols = 4:8) %>% 
+  filter(region == "USA Total") %>%
+  ggplot(aes(x=year)) +
+  geom_line(aes(y=value, col=name)) +
+  geom_vline(data = blackpast_abolition, 
+             aes(xintercept = year, 
+                 col = subject))
+
+```
+
+
+
+
+
+
+
+
+
